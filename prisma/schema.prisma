@@ -1,0 +1,56 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ❌ 删除原来的 enum Role { ... } 块
+// ❌ 删除原来的 enum HotelStatus { ... } 块
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  // 👇 修改：类型改为 String，默认值用字符串写法
+  role      String   @default("MERCHANT") 
+  createdAt DateTime @default(now())
+  hotels    Hotel[]
+}
+
+model Hotel {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  address     String
+  price       Int
+  score       Float    @default(4.5)
+  star        Int      @default(3)
+  images      String   
+  tags        String   
+  
+  // 👇 修改：类型改为 String，默认值用字符串写法
+  status       String   @default("PENDING") 
+  rejectReason String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  merchantId   Int
+  merchant     User     @relation(fields: [merchantId], references: [id])
+  rooms        Room[]
+}
+
+model Room {
+  id        Int     @id @default(autoincrement())
+  title     String
+  price     Int
+  stock     Int
+  images    String?
+  hotelId   Int
+  hotel     Hotel   @relation(fields: [hotelId], references: [id])
+}
