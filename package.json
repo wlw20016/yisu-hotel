@@ -49,5 +49,8 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }
