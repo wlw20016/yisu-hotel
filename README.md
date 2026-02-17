@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 易宿酒店预订平台 (Yisu Hotel Platform)
 
-## Getting Started
+> 第五期前端训练营大作业 - 致力于提供高效、便捷的酒店预订与管理服务。
 
-First, run the development server:
+## 🌐 在线演示
+
+- **演示地址**: [在这里粘贴你的Vercel域名]
+- **测试账号**: `admin` / `123456` (开发中)
+
+## 🛠 技术栈
+
+- **框架**: Next.js 14 (App Router)
+- **语言**: TypeScript
+- **样式**: TailwindCSS + CSS Modules
+- **UI组件**:
+  - 移动端 (C端): Ant Design Mobile
+  - 管理端 (B端): Ant Design Pro Components
+- **数据库**: Prisma (ORM) + SQLite (Dev)
+- **部署**: Vercel
+
+## 📂 目录结构
+
+```text
+src/
+├── app/
+│   ├── (mobile)/      # C端路由组 (移动端布局)
+│   ├── (admin)/       # B端路由组 (后台布局)
+│   └── api/           # Node.js 接口服务
+├── components/        # 公共组件
+├── constants/         # 常量与枚举
+└── prisma/            # 数据库模型
+
+```
+
+## 🚀 快速开始
+
+### 1. 环境准备
+
+确保本地 Node.js 版本 >= 18.17.0。
+
+### 2. 安装依赖
+
+```bash
+git clone [仓库地址]
+cd yisu-hotel
+npm install
+```
+
+### 3. 数据库同步
+
+#### 3.1 根目录创建`.env`
+
+```env
+DATABASE_URL="file:./dev.db"
+```
+
+#### 3.2 创建数据库
+
+```bash
+npx prisma db push
+```
+
+### 4. 启动项目
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🤝 开发规范
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **分支策略**:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `main`: 生产分支 (Protected)。
+- `dev`: 主开发分支。
+- `feat/xxx`: 功能分支。
 
-## Learn More
+2. **提交规范**:
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 必须遵循 Conventional Commits (如 `feat: 新增首页Banner`)。
