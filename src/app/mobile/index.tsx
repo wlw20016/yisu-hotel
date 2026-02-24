@@ -2,22 +2,83 @@
 'use client'
 import React, { useState } from 'react'
 import MobileNavbar from './MobileNavbar'
-import DateTimeSelector from './components/DateTimeSelector'
 import LocationIcon from './components/LocationIcon'
+import DateTimeSelector from './components/DateTimeSelector'
+
+import dynamic from 'next/dynamic'
+
+// 禁用服务器端渲染
+const CitySelector = dynamic(() => import('./components/CitySelector'), { ssr: false })
 
 const HomePage: React.FC = () => {
   // 状态管理：当前激活的标签
   const [activeTab, setActiveTab] = useState<'domestic' | 'overseas' | 'hourly' | 'homestay'>(
     'domestic',
   )
+  // 状态管理：当前选择的城市
+  const [selectedCity, setSelectedCity] = useState<string>('上海')
+  // 状态管理：各标签页的默认城市
+  const [defaultCities, setDefaultCities] = useState<{
+    domestic: string
+    overseas: string
+    hourly: string
+    homestay: string
+  }>({
+    domestic: '上海',
+    overseas: '东京',
+    hourly: '上海',
+    homestay: '上海',
+  })
+  // 状态管理：是否显示城市选择器
+  const [showCitySelector, setShowCitySelector] = useState<boolean>(false)
+  // 状态管理：定位是否成功
+  const [locationSuccess, setLocationSuccess] = useState<boolean>(false)
+  // 状态管理：定位地址
+  const [locationAddress, setLocationAddress] = useState<string>('重庆, 锦辉雅居附近')
+  // 状态管理：位置显示文本
+  const [positionText, setPositionText] = useState<string>('我的位置')
+  // 状态管理：是否显示定位提醒弹窗
+  const [showLocationAlert, setShowLocationAlert] = useState<boolean>(false)
+  // 状态管理：定位提醒弹窗内容
+  const [locationAlertMessage, setLocationAlertMessage] = useState<string>('')
 
   // 处理标签切换
   const handleTabChange = (tab: 'domestic' | 'overseas' | 'hourly' | 'homestay') => {
     setActiveTab(tab)
+    // 切换标签页时，更新selectedCity为对应标签页的默认城市
+    setSelectedCity(defaultCities[tab])
+    // 重置定位状态
+    setLocationSuccess(false)
+    setPositionText(defaultCities[tab])
+  }
+
+  // 处理城市选择
+  const handleCitySelect = (city: string) => {
+    setSelectedCity(city)
+    setShowCitySelector(false)
+    // 当选择其他城市时，隐藏定位成功提示条
+    setLocationSuccess(false)
+    setPositionText(city)
+  }
+
+  // 打开城市选择器
+  const handleOpenCitySelector = () => {
+    setShowCitySelector(true)
+  }
+
+  // 取消城市选择
+  const handleCancelCitySelect = () => {
+    setShowCitySelector(false)
   }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16 max-w-md mx-auto">
+      {/* 城市选择器 */}
+      {showCitySelector && (
+        <div className="fixed inset-0 z-50 bg-white">
+          <CitySelector onSelectCity={handleCitySelect} onCancel={handleCancelCitySelect} />
+        </div>
+      )}
       {/* 轮播图 */}
       <div className="relative h-48 bg-gray-200 overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
@@ -77,18 +138,61 @@ const HomePage: React.FC = () => {
         {/* 国内标签内容 */}
         {activeTab === 'domestic' && (
           <>
+            {/* 定位成功提示条 - 只在定位成功后显示 */}
+            {locationSuccess && (
+              <div className="px-4 py-2 bg-blue-50 flex items-center mb-4">
+                <svg
+                  className="w-4 h-4 text-blue-600 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                <span className="text-blue-600 text-sm">已定位到 {locationAddress}</span>
+              </div>
+            )}
+
             {/* 位置和搜索框 */}
             <div className="flex items-center h-12 border-b border-gray-100">
               <div className="flex items-center space-x-2 text-gray-700">
-                <span className="font-medium">上海</span>
+                <button className="font-medium cursor-pointer" onClick={handleOpenCitySelector}>
+                  {positionText === '我的位置' ? '我的位置' : selectedCity}
+                </button>
                 <span className="text-gray-400 text-xs">▼</span>
                 <button
                   className="cursor-pointer"
                   onClick={() => {
                     if (navigator.geolocation) {
                       navigator.geolocation.getCurrentPosition(
-                        (position) => {
+                        async (position) => {
                           console.log('获取位置成功:', position)
+                          const { latitude, longitude } = position.coords
+
+                          // 使用高德地图逆地理编码API获取实际地址
+                          const apiKey = '3d96555e2d9edb939b5a22b8e602198b'
+                          const url = `https://restapi.amap.com/v3/geocode/regeo?key=${apiKey}&location=${longitude},${latitude}&extensions=base`
+
+                          try {
+                            const response = await fetch(url)
+                            const data = await response.json()
+                            if (data.status === '1' && data.regeocode) {
+                              const address = data.regeocode.formatted_address
+                              setLocationAddress(address)
+                              console.log('获取地址成功:', address)
+                            }
+                          } catch (error) {
+                            console.error('获取地址失败:', error)
+                          }
+
+                          setLocationSuccess(true)
+                          setPositionText('我的位置')
                         },
                         (error) => {
                           console.error('获取位置失败:', error)
@@ -142,18 +246,73 @@ const HomePage: React.FC = () => {
         {/* 海外标签内容 */}
         {activeTab === 'overseas' && (
           <>
+            {/* 定位成功提示条 - 只在定位成功后显示 */}
+            {locationSuccess && (
+              <div className="px-4 py-2 bg-blue-50 flex items-center mb-4">
+                <svg
+                  className="w-4 h-4 text-blue-600 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                <span className="text-blue-600 text-sm">已定位到 {locationAddress}</span>
+              </div>
+            )}
+
             {/* 位置和搜索框 */}
             <div className="flex items-center h-12 border-b border-gray-100">
               <div className="flex items-center space-x-2 text-gray-700">
-                <span className="font-medium">新加坡</span>
+                <button className="font-medium cursor-pointer" onClick={handleOpenCitySelector}>
+                  {positionText === '我的位置' ? '我的位置' : selectedCity}
+                </button>
                 <span className="text-gray-400 text-xs">▼</span>
                 <button
                   className="cursor-pointer"
                   onClick={() => {
                     if (navigator.geolocation) {
                       navigator.geolocation.getCurrentPosition(
-                        (position) => {
+                        async (position) => {
                           console.log('获取位置成功:', position)
+                          const { latitude, longitude } = position.coords
+
+                          // 使用高德地图逆地理编码API获取实际地址
+                          const apiKey = '3d96555e2d9edb939b5a22b8e602198b'
+                          const url = `https://restapi.amap.com/v3/geocode/regeo?key=${apiKey}&location=${longitude},${latitude}&extensions=base`
+
+                          try {
+                            const response = await fetch(url)
+                            const data = await response.json()
+                            if (data.status === '1' && data.regeocode) {
+                              const address = data.regeocode.formatted_address
+                              setLocationAddress(address)
+                              console.log('获取地址成功:', address)
+
+                              // 检查是否在中国境内
+                              const country = data.regeocode.addressComponent?.country || ''
+                              if (country === '中国') {
+                                // 在海外标签页定位到国内，显示提醒弹窗
+                                setLocationAlertMessage(
+                                  '当前定位在国内，海外标签页需要选择海外城市',
+                                )
+                                setShowLocationAlert(true)
+                                // 不更新位置显示
+                                return
+                              }
+                            }
+                          } catch (error) {
+                            console.error('获取地址失败:', error)
+                          }
+
+                          setLocationSuccess(true)
+                          setPositionText('我的位置')
                         },
                         (error) => {
                           console.error('获取位置失败:', error)
@@ -227,18 +386,61 @@ const HomePage: React.FC = () => {
         {/* 钟点房标签内容 */}
         {activeTab === 'hourly' && (
           <>
+            {/* 定位成功提示条 - 只在定位成功后显示 */}
+            {locationSuccess && (
+              <div className="px-4 py-2 bg-blue-50 flex items-center mb-4">
+                <svg
+                  className="w-4 h-4 text-blue-600 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                <span className="text-blue-600 text-sm">已定位到 {locationAddress}</span>
+              </div>
+            )}
+
             {/* 位置和搜索框 */}
             <div className="flex items-center h-12 border-b border-gray-100">
               <div className="flex items-center space-x-2 text-gray-700">
-                <span className="font-medium">上海</span>
+                <button className="font-medium cursor-pointer" onClick={handleOpenCitySelector}>
+                  {positionText === '我的位置' ? '我的位置' : selectedCity}
+                </button>
                 <span className="text-gray-400 text-xs">▼</span>
                 <button
                   className="cursor-pointer"
                   onClick={() => {
                     if (navigator.geolocation) {
                       navigator.geolocation.getCurrentPosition(
-                        (position) => {
+                        async (position) => {
                           console.log('获取位置成功:', position)
+                          const { latitude, longitude } = position.coords
+
+                          // 使用高德地图逆地理编码API获取实际地址
+                          const apiKey = '3d96555e2d9edb939b5a22b8e602198b'
+                          const url = `https://restapi.amap.com/v3/geocode/regeo?key=${apiKey}&location=${longitude},${latitude}&extensions=base`
+
+                          try {
+                            const response = await fetch(url)
+                            const data = await response.json()
+                            if (data.status === '1' && data.regeocode) {
+                              const address = data.regeocode.formatted_address
+                              setLocationAddress(address)
+                              console.log('获取地址成功:', address)
+                            }
+                          } catch (error) {
+                            console.error('获取地址失败:', error)
+                          }
+
+                          setLocationSuccess(true)
+                          setPositionText('我的位置')
                         },
                         (error) => {
                           console.error('获取位置失败:', error)
@@ -272,18 +474,61 @@ const HomePage: React.FC = () => {
         {/* 民宿标签内容 */}
         {activeTab === 'homestay' && (
           <>
+            {/* 定位成功提示条 - 只在定位成功后显示 */}
+            {locationSuccess && (
+              <div className="px-4 py-2 bg-blue-50 flex items-center mb-4">
+                <svg
+                  className="w-4 h-4 text-blue-600 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  ></path>
+                </svg>
+                <span className="text-blue-600 text-sm">已定位到 {locationAddress}</span>
+              </div>
+            )}
+
             {/* 位置和搜索框 */}
             <div className="flex items-center h-12 border-b border-gray-100">
               <div className="flex items-center space-x-2 text-gray-700">
-                <span className="font-medium">上海</span>
+                <button className="font-medium cursor-pointer" onClick={handleOpenCitySelector}>
+                  {positionText === '我的位置' ? '我的位置' : selectedCity}
+                </button>
                 <span className="text-gray-400 text-xs">▼</span>
                 <button
                   className="cursor-pointer"
                   onClick={() => {
                     if (navigator.geolocation) {
                       navigator.geolocation.getCurrentPosition(
-                        (position) => {
+                        async (position) => {
                           console.log('获取位置成功:', position)
+                          const { latitude, longitude } = position.coords
+
+                          // 使用高德地图逆地理编码API获取实际地址
+                          const apiKey = '3d96555e2d9edb939b5a22b8e602198b'
+                          const url = `https://restapi.amap.com/v3/geocode/regeo?key=${apiKey}&location=${longitude},${latitude}&extensions=base`
+
+                          try {
+                            const response = await fetch(url)
+                            const data = await response.json()
+                            if (data.status === '1' && data.regeocode) {
+                              const address = data.regeocode.formatted_address
+                              setLocationAddress(address)
+                              console.log('获取地址成功:', address)
+                            }
+                          } catch (error) {
+                            console.error('获取地址失败:', error)
+                          }
+
+                          setLocationSuccess(true)
+                          setPositionText('我的位置')
                         },
                         (error) => {
                           console.error('获取位置失败:', error)
@@ -333,7 +578,7 @@ const HomePage: React.FC = () => {
                   外滩
                 </span>
                 <span className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-full text-sm">
-                  浦芬
+                  浦东
                 </span>
               </div>
             </div>
@@ -346,29 +591,39 @@ const HomePage: React.FC = () => {
             查询
           </button>
         </div>
-
-        {/* 服务保障 */}
-        {activeTab === 'overseas' && (
-          <div className="flex items-center justify-center space-x-4 py-3">
-            <div className="flex items-center space-x-1">
-              <span className="text-green-500">🛡️</span>
-              <span className="text-gray-600 text-sm">安心出境游</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <span className="text-green-500">🛏️</span>
-              <span className="text-gray-600 text-sm">入住保障</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <span className="text-green-500">📞</span>
-              <span className="text-gray-600 text-sm">7×24h客服</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <span className="text-green-500">🚨</span>
-              <span className="text-gray-600 text-sm">应急支援</span>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* 定位提醒弹窗 */}
+      {showLocationAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-5 max-w-xs w-full mx-4">
+            <div className="text-center mb-4">
+              <svg
+                className="w-12 h-12 text-yellow-500 mx-auto mb-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900">定位提醒</h3>
+            </div>
+            <p className="text-gray-600 text-center mb-6">{locationAlertMessage}</p>
+            <button
+              className="w-full py-2 bg-blue-600 text-white rounded-md font-medium"
+              onClick={() => setShowLocationAlert(false)}
+            >
+              确定
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 底部导航栏 */}
       <MobileNavbar />
