@@ -25,14 +25,33 @@ export default function AdminLoginPage() {
       // 在 app/(admin)/login/page.tsx 的 handleSubmit 中修改：
 
       if (loginType === 'login') {
-        console.log('登录提交参数:', values)
-        messageApi.success('登录成功！正在为您跳转...')
+        // === 真实的登录请求逻辑 ===
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: values.username,
+            password: values.password,
+          }),
+        })
 
-        // 👉 新增跳转逻辑：登录成功后跳转到商户的酒店管理页
-        // 真实业务中可以根据后端返回的 role 判断是跳转到 /merchant 还是 /admin
-        setTimeout(() => {
-          router.push('/merchant/hotel')
-        }, 1000)
+        const data = await response.json()
+
+        if (response.ok) {
+          messageApi.success('登录成功！正在为您跳转...')
+
+          // 👉 根据后端返回的角色，自动判断跳转路由
+          setTimeout(() => {
+            // 注意：判断条件要看你注册时存入数据库的值是小写 'admin' 还是大写 'ADMIN'
+            if (data.user.role === 'admin' || data.user.role === 'ADMIN') {
+              router.push('/admin/hotel') // 跳转到刚刚写的管理员审核列表页
+            } else {
+              router.push('/merchant/hotel') // 否则跳转到商户的酒店信息录入页
+            }
+          }, 1000)
+        } else {
+          messageApi.error(data.message || '登录失败，请检查账号密码')
+        }
       } else {
         if (values.password !== values.confirmPassword) {
           // 👉 修改：将 message.error 改为 messageApi.error
