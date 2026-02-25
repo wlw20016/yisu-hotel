@@ -40,13 +40,16 @@ export default function AdminLoginPage() {
         if (response.ok) {
           messageApi.success('登录成功！正在为您跳转...')
 
-          // 👉 根据后端返回的角色，自动判断跳转路由
+          // 👉 新增：将用户信息存入本地浏览器缓存
+          localStorage.setItem('userRole', data.user.role.toUpperCase()) // 统一转成大写方便判断
+          localStorage.setItem('username', data.user.username)
+          localStorage.setItem('userId', data.user.id.toString())
+
           setTimeout(() => {
-            // 注意：判断条件要看你注册时存入数据库的值是小写 'admin' 还是大写 'ADMIN'
-            if (data.user.role === 'admin' || data.user.role === 'ADMIN') {
-              router.push('/admin/hotel') // 跳转到刚刚写的管理员审核列表页
+            if (data.user.role.toUpperCase() === 'ADMIN') {
+              router.push('/admin/hotel')
             } else {
-              router.push('/merchant/hotel') // 否则跳转到商户的酒店信息录入页
+              router.push('/merchant/hotel')
             }
           }, 1000)
         } else {

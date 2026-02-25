@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       rooms,
       // 注意：真实项目中，商户ID应该从登录后的全局状态或Token中读取
       // 这里为了让大作业能快速跑通测试，如果没有传，我们默认用 1 (即你通过 seed.ts 创建的商户)
-      merchantId = 1,
+      merchantId,
     } = body
 
     // 存入数据库
@@ -51,6 +51,59 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: '酒店及房型创建成功', hotel: newHotel }, { status: 201 })
   } catch (error) {
     console.error('保存酒店失败:', error)
+    return NextResponse.json({ message: '服务器内部错误' }, { status: 500 })
+  }
+}
+
+// app/api/hotel/route.ts 中，紧接着原本的 POST 方法下面添加：
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json()
+    const { id, title, address, price, star, tags, description, rooms, merchantId } = body
+
+    if (!id || !merchantId) {
+      return NextResponse.json({ message: '缺少必要参数' }, { status: 400 })
+    }
+
+    // 验证该酒店是否属于当前商户
+    const existingHotel = await prisma.hotel.findUnique({ where: { id: Number(id) } })
+    if (!existingHotel || existingHotel.merchantId !== Number(merchantId)) {
+      return NextResponse.json({ message: '无权修改该酒店' }, { status: 403 })
+    }
+
+    // 更新酒店信息，并清空驳回原因，状态重新变为审核中
+    const updatedHotel = await prisma.hotel.update({
+      where: { id: Number(id) },
+      data: {
+        title,
+        address,
+        price: Number(price),
+        star: Number(star),
+        description,
+        tags: tags ? JSON.stringify(tags) : '[]',
+        status: 'PENDING', // 👉 重新提交后，自动变回审核中
+        rejectReason: null, // 👉 清空之前的驳回原因
+        // 覆盖房型：简单粗暴地删除旧房型，创建新房型
+        rooms: {
+          deleteMany: {},
+          create:
+            rooms?.map(
+              (room: { title: string; price: string | number; stock: string | number }) => ({
+                title: room.title,
+                price: Number(room.price),
+                stock: Number(room.stock),
+              }),
+            ) || [],
+        },
+      },
+    })
+
+    return NextResponse.json(
+      { message: '修改成功，已重新提交审核', hotel: updatedHotel },
+      { status: 200 },
+    )
+  } catch (error) {
+    console.error('修改酒店失败:', error)
     return NextResponse.json({ message: '服务器内部错误' }, { status: 500 })
   }
 }
