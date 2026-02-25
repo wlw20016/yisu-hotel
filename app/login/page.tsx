@@ -12,7 +12,9 @@ export default function AdminLoginPage() {
   const [loginType, setLoginType] = useState<LoginType>('login')
   const router = useRouter()
 
-  // 模拟提交处理函数
+  // 👉 新增：使用 useMessage 钩子获取 messageApi 和 contextHolder
+  const [messageApi, contextHolder] = message.useMessage()
+
   const handleSubmit = async (values: {
     username: string
     password: string
@@ -21,33 +23,47 @@ export default function AdminLoginPage() {
   }) => {
     try {
       if (loginType === 'login') {
-        // TODO: 对接真实登录接口
-        // 需求说明：登录无需选择角色，系统自动根据账号判断
         console.log('登录提交参数:', values)
-        message.success('登录成功！')
-
-        // 模拟角色判断跳转
-        // const role = await api.login(values);
-        // if (role === 'admin') router.push('/admin/dashboard');
-        // else router.push('/merchant/dashboard');
+        // 👉 修改：将 message.success 改为 messageApi.success
+        messageApi.success('登录成功！(模拟)')
       } else {
-        // TODO: 对接真实注册接口
-        // 需求说明：注册需选择角色（商户/管理员）
-        console.log('注册提交参数:', values)
         if (values.password !== values.confirmPassword) {
-          message.error('两次输入的密码不一致！')
+          // 👉 修改：将 message.error 改为 messageApi.error
+          messageApi.error('两次输入的密码不一致！')
           return
         }
-        message.success('注册成功，请登录！')
-        setLoginType('login') // 注册成功后切换回登录
+
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: values.username,
+            password: values.password,
+            role: values.role,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          messageApi.success('注册成功，请登录！')
+          setLoginType('login')
+        } else {
+          messageApi.error(data.message || '注册失败')
+        }
       }
     } catch (error) {
-      message.error(`${loginType === 'login' ? '登录' : '注册'}失败，请重试！`)
+      messageApi.error(`${loginType === 'login' ? '登录' : '注册'}请求失败，请检查网络！`)
     }
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* 👉 新增：必须把 contextHolder 放在组件渲染树中，这样弹窗才能正常挂载并获取上下文 */}
+      {contextHolder}
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">易宿酒店管理平台</h2>
       </div>
@@ -75,7 +91,6 @@ export default function AdminLoginPage() {
               ]}
             />
 
-            {/* 公用的用户名和密码字段 */}
             <ProFormText
               name="username"
               fieldProps={{
@@ -83,12 +98,7 @@ export default function AdminLoginPage() {
                 prefix: <UserOutlined className={'prefixIcon'} />,
               }}
               placeholder="请输入用户名/账号"
-              rules={[
-                {
-                  required: true,
-                  message: '请输入用户名!',
-                },
-              ]}
+              rules={[{ required: true, message: '请输入用户名!' }]}
             />
             <ProFormText.Password
               name="password"
@@ -97,15 +107,9 @@ export default function AdminLoginPage() {
                 prefix: <LockOutlined className={'prefixIcon'} />,
               }}
               placeholder="请输入密码"
-              rules={[
-                {
-                  required: true,
-                  message: '请输入密码！',
-                },
-              ]}
+              rules={[{ required: true, message: '请输入密码！' }]}
             />
 
-            {/* 仅在注册时显示的额外字段 */}
             {loginType === 'register' && (
               <>
                 <ProFormText.Password
@@ -115,33 +119,17 @@ export default function AdminLoginPage() {
                     prefix: <LockOutlined className={'prefixIcon'} />,
                   }}
                   placeholder="请确认密码"
-                  rules={[
-                    {
-                      required: true,
-                      message: '请再次输入密码！',
-                    },
-                  ]}
+                  rules={[{ required: true, message: '请再次输入密码！' }]}
                 />
                 <ProFormRadio.Group
                   name="role"
                   label="选择您的角色"
                   initialValue="merchant"
                   options={[
-                    {
-                      label: '酒店商户',
-                      value: 'merchant',
-                    },
-                    {
-                      label: '系统管理员',
-                      value: 'admin',
-                    },
+                    { label: '酒店商户', value: 'merchant' },
+                    { label: '系统管理员', value: 'admin' },
                   ]}
-                  rules={[
-                    {
-                      required: true,
-                      message: '请选择您的角色！',
-                    },
-                  ]}
+                  rules={[{ required: true, message: '请选择您的角色！' }]}
                 />
               </>
             )}
