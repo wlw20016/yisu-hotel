@@ -21,20 +21,52 @@ export default function HotelManagePage() {
   // 处理表单提交
   const handleFinish = async (values: Record<string, unknown>) => {
     try {
-      console.log('准备提交的酒店数据:', values)
       messageApi.loading({ content: '正在保存酒店信息...', key: 'save' })
 
-      // TODO: 后续在这里对接 POST /api/hotel 接口，将数据存入 SQLite 数据库
-      // 模拟网络请求延迟
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      // 发送真实的网络请求到我们刚写的 API
+      const response = await fetch('/api/hotel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // 这里把表单的值传给后端，并临时附加一个 merchantId
+        body: JSON.stringify({
+          ...values,
+          merchantId: 1,
+        }),
+      })
 
-      messageApi.success({ content: '酒店信息录入成功！系统已提交审核。', key: 'save' })
-      return true // 返回 true 会自动清空/重置表单（可根据需要修改）
+      if (response.ok) {
+        messageApi.success({ content: '酒店信息录入成功！系统已提交审核。', key: 'save' })
+        return true // 返回 true 会自动清空/重置表单
+      } else {
+        const errorData = await response.json()
+        messageApi.error({ content: errorData.message || '保存失败', key: 'save' })
+        return false
+      }
     } catch (error) {
-      messageApi.error({ content: '保存失败，请重试！', key: 'save' })
+      messageApi.error({ content: '网络错误，请重试！', key: 'save' })
       return false
     }
   }
+
+  //   // 处理表单提交
+  //   const handleFinish = async (values: Record<string, unknown>) => {
+  //     try {
+  //       console.log('准备提交的酒店数据:', values)
+  //       messageApi.loading({ content: '正在保存酒店信息...', key: 'save' })
+
+  //       // TODO: 后续在这里对接 POST /api/hotel 接口，将数据存入 SQLite 数据库
+  //       // 模拟网络请求延迟
+  //       await new Promise((resolve) => setTimeout(resolve, 1500))
+
+  //       messageApi.success({ content: '酒店信息录入成功！系统已提交审核。', key: 'save' })
+  //       return true // 返回 true 会自动清空/重置表单（可根据需要修改）
+  //     } catch (error) {
+  //       messageApi.error({ content: '保存失败，请重试！', key: 'save' })
+  //       return false
+  //     }
+  //   }
 
   return (
     <div className="bg-gray-50 min-h-screen p-6">
