@@ -48,7 +48,7 @@ export default function AdminHotelListPage() {
         messageApi.error(data.message || '操作失败')
         return false
       }
-    } catch (error) {
+    } catch {
       messageApi.error('网络错误，请重试')
       return false
     }

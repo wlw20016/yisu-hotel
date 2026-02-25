@@ -60,7 +60,7 @@ export default function MerchantHotelPage() {
         messageApi.error({ content: errorData.message || '保存失败', key: 'save' })
         return false
       }
-    } catch (error) {
+    } catch {
       messageApi.error({ content: '网络错误，请重试！', key: 'save' })
       return false
     }
@@ -92,7 +92,7 @@ export default function MerchantHotelPage() {
         messageApi.error({ content: errorData.message || '更新失败', key: 'update' })
         return false
       }
-    } catch (error) {
+    } catch {
       messageApi.error({ content: '网络错误，请重试！', key: 'update' })
       return false
     }

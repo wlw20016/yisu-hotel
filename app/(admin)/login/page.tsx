@@ -83,7 +83,7 @@ export default function AdminLoginPage() {
           messageApi.error(data.message || '注册失败')
         }
       }
-    } catch (error) {
+    } catch {
       messageApi.error(`${loginType === 'login' ? '登录' : '注册'}请求失败，请检查网络！`)
     }
   }
