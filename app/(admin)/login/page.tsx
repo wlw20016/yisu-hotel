@@ -22,10 +22,17 @@ export default function AdminLoginPage() {
     role?: 'merchant' | 'admin'
   }) => {
     try {
+      // 在 app/(admin)/login/page.tsx 的 handleSubmit 中修改：
+
       if (loginType === 'login') {
         console.log('登录提交参数:', values)
-        // 👉 修改：将 message.success 改为 messageApi.success
-        messageApi.success('登录成功！(模拟)')
+        messageApi.success('登录成功！正在为您跳转...')
+
+        // 👉 新增跳转逻辑：登录成功后跳转到商户的酒店管理页
+        // 真实业务中可以根据后端返回的 role 判断是跳转到 /merchant 还是 /admin
+        setTimeout(() => {
+          router.push('/merchant/hotel')
+        }, 1000)
       } else {
         if (values.password !== values.confirmPassword) {
           // 👉 修改：将 message.error 改为 messageApi.error
