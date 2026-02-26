@@ -1,16 +1,14 @@
 // src/app/mobile/index.tsx
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import MobileNavbar from './MobileNavbar'
 import LocationIcon from './components/LocationIcon'
 import DateTimeSelector from './components/DateTimeSelector'
-
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation' // 👉 新增引入
 
-// 禁用服务器端渲染
 const CitySelector = dynamic(() => import('./components/CitySelector'), { ssr: false })
 
-// 定义酒店数据类型
 interface Hotel {
   id: number
   title: string
@@ -18,11 +16,12 @@ interface Hotel {
   price: number
   score: number
   star: number
-  tags: string // JSON 字符串
+  tags: string
   images: string
 }
 
 const HomePage: React.FC = () => {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<'domestic' | 'overseas' | 'hourly' | 'homestay'>(
     'domestic',
   )
@@ -34,60 +33,109 @@ const HomePage: React.FC = () => {
     homestay: '上海',
   })
   const [showCitySelector, setShowCitySelector] = useState<boolean>(false)
-  const [locationSuccess, setLocationSuccess] = useState<boolean>(false)
-  const [locationAddress, setLocationAddress] = useState<string>('重庆, 锦辉雅居附近')
-  const [positionText, setPositionText] = useState<string>('我的位置')
-  const [showLocationAlert, setShowLocationAlert] = useState<boolean>(false)
-  const [locationAlertMessage, setLocationAlertMessage] = useState<string>('')
 
-  // 👉 新增：用于存储从数据库获取的推荐酒店列表
+  const [locationSuccess, setLocationSuccess] = useState<boolean>(false)
+  const [positionText, setPositionText] = useState<string>('我的位置')
+
+  // --- 列表、分页与筛选状态 ---
   const [recommendedHotels, setRecommendedHotels] = useState<Hotel[]>([])
   const [isLoadingHotels, setIsLoadingHotels] = useState(false)
 
-  // 👉 新增：根据当前选中的城市获取真实的推荐酒店
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const observerRef = useRef<HTMLDivElement>(null)
+
+  const [filterStar, setFilterStar] = useState<number | null>(null)
+  const [filterMaxPrice, setFilterMaxPrice] = useState<number | null>(null)
+
+  // 👉 搜索框相关的双向绑定状态
+  const [inputText, setInputText] = useState<string>('')
+  const [appliedKeyword, setAppliedKeyword] = useState<string>('')
+
+  // 当筛选条件、城市或【搜索词】改变时，重置分页和列表
+  useEffect(() => {
+    setPage(1)
+    setRecommendedHotels([])
+    setHasMore(false)
+  }, [selectedCity, positionText, filterStar, filterMaxPrice, appliedKeyword])
+
+  // 拉取酒店数据
   useEffect(() => {
     const fetchHotels = async () => {
-      setIsLoadingHotels(true)
+      if (page === 1) setIsLoadingHotels(true)
+      else setIsLoadingMore(true)
+
       try {
         const queryCity = positionText === '我的位置' ? selectedCity : positionText
-        const response = await fetch(`/api/public/hotel?city=${queryCity}`)
+        let url = `/api/public/hotel?city=${encodeURIComponent(queryCity)}&page=${page}&pageSize=5`
+
+        if (filterStar) url += `&star=${filterStar}`
+        if (filterMaxPrice) url += `&maxPrice=${filterMaxPrice}`
+        // 👉 将关键词拼接到请求中
+        if (appliedKeyword) url += `&keyword=${encodeURIComponent(appliedKeyword)}`
+
+        const response = await fetch(url)
         const result = await response.json()
+
         if (result.success) {
-          setRecommendedHotels(result.data || [])
+          if (page === 1) {
+            setRecommendedHotels(result.data || [])
+          } else {
+            setRecommendedHotels((prev) => [...prev, ...(result.data || [])])
+          }
+          setHasMore(result.hasMore)
         }
       } catch (error) {
         console.error('拉取酒店数据失败:', error)
       } finally {
         setIsLoadingHotels(false)
+        setIsLoadingMore(false)
       }
     }
 
     fetchHotels()
-  }, [selectedCity, positionText]) // 当城市改变时，重新拉取数据
+  }, [page, selectedCity, positionText, filterStar, filterMaxPrice, appliedKeyword])
+
+  // 触底加载更多
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingHotels && !isLoadingMore) {
+          setPage((prevPage) => prevPage + 1)
+        }
+      },
+      { threshold: 0.1 },
+    )
+
+    if (observerRef.current) observer.observe(observerRef.current)
+    return () => observer.disconnect()
+  }, [hasMore, isLoadingHotels, isLoadingMore])
 
   const handleTabChange = (tab: 'domestic' | 'overseas' | 'hourly' | 'homestay') => {
     setActiveTab(tab)
     setSelectedCity(defaultCities[tab])
     setLocationSuccess(false)
     setPositionText(defaultCities[tab])
+    // 切换标签时顺便清空搜索词
+    setInputText('')
+    setAppliedKeyword('')
   }
-
-  const handleCitySelect = (city: string) => {
-    setSelectedCity(city)
-    setShowCitySelector(false)
-    setLocationSuccess(false)
-    setPositionText(city)
-  }
-
-  const handleOpenCitySelector = () => setShowCitySelector(true)
-  const handleCancelCitySelect = () => setShowCitySelector(false)
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto">
       {/* 城市选择器 */}
       {showCitySelector && (
         <div className="fixed inset-0 z-50 bg-white">
-          <CitySelector onSelectCity={handleCitySelect} onCancel={handleCancelCitySelect} />
+          <CitySelector
+            onSelectCity={(city) => {
+              setSelectedCity(city)
+              setShowCitySelector(false)
+              setLocationSuccess(false)
+              setPositionText(city)
+            }}
+            onCancel={() => setShowCitySelector(false)}
+          />
         </div>
       )}
 
@@ -95,104 +143,113 @@ const HomePage: React.FC = () => {
       <div className="relative h-48 bg-gray-200 overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           <img
-            src={
-              activeTab === 'overseas'
-                ? 'https://th.bing.com/th/id/R.12bed6b5916796d3c10cc9515074c539?rik=08Gbh5CYGnCLzQ&riu=http%3a%2f%2fdimg04.c-ctrip.com%2fimages%2ffd%2fvacations%2fg2%2fM0B%2fD2%2f71%2fCghzgVSY6D-ABSCjAAfhod4N74w702.jpg&ehk=xjuD7UuHA%2bGHEaIFbTqMtSvuKGoOrPRIg%2btBgaf3adU%3d&risl=&pid=ImgRaw&r=0'
-                : activeTab === 'hourly'
-                  ? 'https://www.bing.com/th/id/OIP.AksgwrrEt7b4N2F27rvyIgHaEl?w=202&h=128&c=8&rs=1&qlt=90&o=6&cb=defcachec1&dpr=2&pid=3.1&rm=2'
-                  : activeTab === 'homestay'
-                    ? 'https://img95.699pic.com/photo/50036/0204.jpg_wh860.jpg'
-                    : 'https://img95.699pic.com/photo/50048/1095.jpg_wh860.jpg'
-            }
+            src="https://img95.699pic.com/photo/50048/1095.jpg_wh860.jpg"
             alt="酒店轮播图"
             className="w-full h-full object-cover"
           />
         </div>
       </div>
 
-      {/* 主要内容 */}
       <div className="px-4 py-3">
-        {/* 分类标签 - Tab切换 */}
-        <div className="flex items-center justify-between mb-4 overflow-x-auto">
-          <div className="flex items-center space-x-6">
+        {/* 👉 分类标签，使用 as const 完美解决 any 报错 */}
+        <div className="flex items-center space-x-6 mb-4 overflow-x-auto">
+          {(['domestic', 'overseas', 'hourly', 'homestay'] as const).map((tab) => (
             <span
-              className={`whitespace-nowrap pb-1 cursor-pointer ${activeTab === 'domestic' ? 'text-blue-600 font-medium border-b-2 border-blue-600' : 'text-gray-500'}`}
-              onClick={() => handleTabChange('domestic')}
+              key={tab}
+              className={`whitespace-nowrap pb-1 cursor-pointer ${activeTab === tab ? 'text-blue-600 font-medium border-b-2 border-blue-600' : 'text-gray-500'}`}
+              onClick={() => handleTabChange(tab)}
             >
-              国内
+              {tab === 'domestic'
+                ? '国内'
+                : tab === 'overseas'
+                  ? '海外'
+                  : tab === 'hourly'
+                    ? '钟点房'
+                    : '民宿'}
             </span>
-            <span
-              className={`whitespace-nowrap pb-1 cursor-pointer ${activeTab === 'overseas' ? 'text-blue-600 font-medium border-b-2 border-blue-600' : 'text-gray-500'}`}
-              onClick={() => handleTabChange('overseas')}
-            >
-              海外
-            </span>
-            <span
-              className={`whitespace-nowrap pb-1 cursor-pointer ${activeTab === 'hourly' ? 'text-blue-600 font-medium border-b-2 border-blue-600' : 'text-gray-500'}`}
-              onClick={() => handleTabChange('hourly')}
-            >
-              钟点房
-            </span>
-            <span
-              className={`whitespace-nowrap pb-1 cursor-pointer ${activeTab === 'homestay' ? 'text-blue-600 font-medium border-b-2 border-blue-600' : 'text-gray-500'}`}
-              onClick={() => handleTabChange('homestay')}
-            >
-              民宿
-            </span>
-          </div>
+          ))}
         </div>
 
-        {/* --- 这里省略中间重复的表单和定位代码，保留你原本的 UI --- */}
-        {/* （因为篇幅限制，此处假设中间的定位框、日期选择器代码保持你原来的一模一样不变） */}
-        {/* （为了让你复制粘贴完整可用，我把它拼完整） */}
-
         {/* 定位与搜索框组合 */}
-        <div className="flex items-center h-12 border-b border-gray-100">
+        <div className="flex items-center h-12 border-b border-gray-100 bg-white px-3 rounded-t-lg">
           <div className="flex items-center space-x-2 text-gray-700">
-            <button className="font-medium cursor-pointer" onClick={handleOpenCitySelector}>
+            <button
+              className="font-medium cursor-pointer"
+              onClick={() => setShowCitySelector(true)}
+            >
               {positionText === '我的位置' ? '我的位置' : selectedCity}
             </button>
             <span className="text-gray-400 text-xs">▼</span>
-            <button
-              className="cursor-pointer"
-              onClick={() => {
-                /* 保留你原本的定位逻辑 */
-              }}
-            >
-              <LocationIcon className="w-8 h-8" />
+            <button className="cursor-pointer">
+              <LocationIcon className="w-6 h-6 text-blue-500" />
             </button>
           </div>
           <div className="w-px h-6 bg-gray-200 mx-3"></div>
           <div className="flex-1 relative">
+            {/* 👉 这里正确绑定了 inputText 和 onChange 事件 */}
             <input
               type="text"
               placeholder="位置/品牌/酒店"
-              className="w-full px-3 py-2 bg-gray-100 rounded text-sm border-0"
+              className="w-full bg-transparent text-sm border-0 outline-none"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                // 增加用户体验：在手机键盘上点击“搜索/回车”也能触发查询
+                if (e.key === 'Enter') {
+                  setAppliedKeyword(inputText)
+                }
+              }}
             />
           </div>
         </div>
 
-        <div className="h-12 border-b border-gray-100 flex items-center justify-center">
+        <div className="h-12 border-b border-gray-100 bg-white px-3 flex items-center justify-center">
           <DateTimeSelector />
         </div>
 
-        {/* 查询按钮 */}
-        <div className="py-4">
-          <button className="w-full py-3 rounded-full font-medium text-lg bg-blue-600 text-white shadow-md">
+        {/* 价格星级筛选器 */}
+        <div className="bg-white px-3 py-3 rounded-b-lg shadow-sm mb-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilterStar(filterStar === 4 ? null : 4)}
+              className={`px-3 py-1 text-xs rounded-full border transition-colors ${filterStar === 4 ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+            >
+              4星及以上
+            </button>
+            <button
+              onClick={() => setFilterMaxPrice(filterMaxPrice === 300 ? null : 300)}
+              className={`px-3 py-1 text-xs rounded-full border transition-colors ${filterMaxPrice === 300 ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+            >
+              300元以内
+            </button>
+            <button
+              onClick={() => setFilterMaxPrice(filterMaxPrice === 500 ? null : 500)}
+              className={`px-3 py-1 text-xs rounded-full border transition-colors ${filterMaxPrice === 500 ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+            >
+              500元以内
+            </button>
+          </div>
+        </div>
+
+        <div className="py-2">
+          {/* 👉 查询按钮绑定了 onClick 事件 */}
+          <button
+            className="w-full py-3 rounded-full font-medium text-lg bg-blue-600 text-white shadow-md active:bg-blue-700 transition-colors"
+            onClick={() => setAppliedKeyword(inputText)}
+          >
             查询
           </button>
         </div>
 
-        {/* 👉 新增：首页动态推荐酒店列表 */}
-        <div className="mt-4 mb-6">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">为推荐你</h2>
+        {/* 酒店列表渲染区 */}
+        <div className="mt-6 mb-6">
+          <h2 className="text-lg font-bold text-gray-800 mb-4">为您推荐</h2>
 
-          {isLoadingHotels ? (
+          {isLoadingHotels && page === 1 ? (
             <div className="text-center text-gray-400 py-6">正在寻找好店...</div>
           ) : recommendedHotels.length > 0 ? (
             <div className="space-y-4">
-              {recommendedHotels.map((hotel) => {
-                // 安全解析 tags
+              {recommendedHotels.map((hotel, index) => {
                 let tagsArray: string[] = []
                 try {
                   tagsArray = JSON.parse(hotel.tags || '[]')
@@ -200,14 +257,14 @@ const HomePage: React.FC = () => {
 
                 return (
                   <div
-                    key={hotel.id}
-                    className="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col"
+                    key={`${hotel.id}-${index}`}
+                    className="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col active:scale-[0.98] transition-transform"
+                    onClick={() => router.push(`/mobile/hotel/${hotel.id}`)}
                   >
-                    {/* 这里放酒店封面图，暂时用占位图 */}
                     <img
                       src="https://img95.699pic.com/photo/50048/1095.jpg_wh860.jpg"
                       alt={hotel.title}
-                      className="w-full h-36 object-cover"
+                      className="w-full h-40 object-cover"
                     />
                     <div className="p-3">
                       <h3 className="font-bold text-base text-gray-900 line-clamp-1">
@@ -221,9 +278,9 @@ const HomePage: React.FC = () => {
                       </div>
 
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {tagsArray.slice(0, 3).map((tag, index) => (
+                        {tagsArray.slice(0, 3).map((tag, i) => (
                           <span
-                            key={index}
+                            key={i}
                             className="text-xs text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded"
                           >
                             {tag}
@@ -237,7 +294,7 @@ const HomePage: React.FC = () => {
                           <span className="text-xl">{hotel.price}</span>
                           <span className="text-xs text-gray-400 font-normal ml-1">起</span>
                         </div>
-                        <button className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-full">
+                        <button className="bg-blue-600 text-white text-xs px-4 py-1.5 rounded-full active:bg-blue-700">
                           去预订
                         </button>
                       </div>
@@ -245,13 +302,15 @@ const HomePage: React.FC = () => {
                   </div>
                 )
               })}
+
+              <div ref={observerRef} className="py-4 text-center text-xs text-gray-400">
+                {isLoadingMore ? '正在拼命加载中...' : hasMore ? '上滑加载更多' : '— 到底了 —'}
+              </div>
             </div>
           ) : (
-            <div className="text-center text-gray-400 py-8 bg-white rounded-xl">
-              <div className="mb-2">📭</div>
-              暂无该城市的酒店数据
-              <br />
-              <span className="text-xs">请尝试在后台录入并审核通过一些酒店</span>
+            <div className="text-center text-gray-400 py-8 bg-white rounded-xl shadow-sm">
+              <div className="mb-2 text-2xl">📭</div>
+              暂无符合条件的酒店
             </div>
           )}
         </div>

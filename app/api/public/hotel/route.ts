@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-// 👉 修改 1：引入 Prisma 命名空间，以便使用它生成的类型
 import { PrismaClient, Prisma } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -8,26 +7,49 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const city = searchParams.get('city')
+    const page = parseInt(searchParams.get('page') || '1')
+    const pageSize = parseInt(searchParams.get('pageSize') || '5')
+    const star = searchParams.get('star')
+    const maxPrice = searchParams.get('maxPrice')
 
-    // 👉 修改 2：将 any 替换为 Prisma 自动生成的精确类型 Prisma.HotelWhereInput
+    // 👉 1. 新增：获取前端传来的关键词
+    const keyword = searchParams.get('keyword')
+
     const whereCondition: Prisma.HotelWhereInput = {
       status: 'PUBLISHED',
     }
 
-    // 如果前端传了城市参数，做简单的地址模糊匹配
     if (city && city !== '我的位置') {
-      whereCondition.address = {
-        contains: city,
-      }
+      whereCondition.address = { contains: city }
+    }
+
+    if (star) {
+      whereCondition.star = { gte: parseInt(star) }
+    }
+
+    if (maxPrice) {
+      whereCondition.price = { lte: parseInt(maxPrice) }
+    }
+
+    // 👉 2. 新增：关键词模糊搜索（匹配标题或地址）
+    if (keyword) {
+      whereCondition.OR = [{ title: { contains: keyword } }, { address: { contains: keyword } }]
     }
 
     const hotels = await prisma.hotel.findMany({
       where: whereCondition,
       orderBy: { star: 'desc' },
-      take: 10,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     })
 
-    return NextResponse.json({ success: true, data: hotels })
+    const total = await prisma.hotel.count({ where: whereCondition })
+
+    return NextResponse.json({
+      success: true,
+      data: hotels,
+      hasMore: page * pageSize < total,
+    })
   } catch (error) {
     console.error('获取推荐酒店失败:', error)
     return NextResponse.json({ success: false, message: '获取数据失败' }, { status: 500 })
