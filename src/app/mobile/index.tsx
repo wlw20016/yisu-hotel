@@ -12,6 +12,7 @@ import RecommendVirtualList from './components/RecommendVirtualList'
 import { sendTrackEvent } from './../../utiles/track'
 // 在文件顶部的 import 区域加入这行：
 import TrackedBannerItem, { BannerType } from './components/TrackedBannerItem'
+import { useDebounce } from '@/src/hooks/useDebounce'
 const CitySelector = dynamic(() => import('./components/CitySelector'), { ssr: false })
 
 interface Hotel {
@@ -58,6 +59,14 @@ const HomePage: React.FC = () => {
   // 👉 搜索框相关的双向绑定状态
   const [inputText, setInputText] = useState<string>('')
   const [appliedKeyword, setAppliedKeyword] = useState<string>('')
+
+  // 1. 获取防抖后的搜索词 (用户停止输入 500ms 后，这个值才会更新)
+  const debouncedSearchText = useDebounce<string>(inputText, 500)
+
+  // 2. 监听防抖词：只要它发生变化，就自动赋值给 appliedKeyword
+  useEffect(() => {
+    setAppliedKeyword(debouncedSearchText)
+  }, [debouncedSearchText])
 
   // 👉 新增：定义轮播图广告数据源 (id 请替换为你数据库中真实存在的酒店 id)
   const adBanners: BannerType[] = [
@@ -242,12 +251,12 @@ const HomePage: React.FC = () => {
               className="w-full bg-transparent text-sm border-0 outline-none"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                // 增加用户体验：在手机键盘上点击“搜索/回车”也能触发查询
-                if (e.key === 'Enter') {
-                  setAppliedKeyword(inputText)
-                }
-              }}
+              // onKeyDown={(e) => {
+              //   // 增加用户体验：在手机键盘上点击“搜索/回车”也能触发查询
+              //   if (e.key === 'Enter') {
+              //     setAppliedKeyword(inputText)
+              //   }
+              // }}
             />
           </div>
         </div>

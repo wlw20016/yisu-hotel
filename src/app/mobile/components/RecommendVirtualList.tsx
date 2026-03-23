@@ -17,6 +17,8 @@ export default function RecommendVirtualList() {
   const [recommendList, setRecommendList] = useState<HotelItem[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [hasMore, setHasMore] = useState<boolean>(true)
+  // 记录当前正在被点击预订的酒店 ID
+  const [bookingHotelId, setBookingHotelId] = useState<number | null>(null)
 
   // 滚动容器的 ref
   const parentRef = useRef<HTMLDivElement>(null)
@@ -84,6 +86,32 @@ export default function RecommendVirtualList() {
       fetchMoreData()
     }
   }, [virtualItems, recommendList.length, hasMore, isLoading, fetchMoreData])
+
+  // 处理去预订的点击逻辑（严格使用 React.MouseEvent 类型）
+  const handleBookClick = async (e: React.MouseEvent<HTMLButtonElement>, hotelId: number) => {
+    // 1. 阻止事件冒泡，防止触发外层卡片的路由跳转
+    e.stopPropagation()
+
+    // 2. 状态锁拦截
+    if (bookingHotelId !== null) return
+
+    // 3. 上锁
+    setBookingHotelId(hotelId)
+
+    try {
+      // 4. 模拟向后端发送预订校验请求
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
+      // 5. 校验成功，执行页面跳转（你可以把这里的注释解开，换成你真实的订单页路由）
+      console.log(`准备跳转到酒店 ${hotelId} 的下单页`)
+      // router.push(`/mobile/order/confirm?hotelId=${hotelId}`)
+    } catch (error) {
+      console.error('预订前置校验失败:', error)
+    } finally {
+      // 6. 解锁
+      setBookingHotelId(null)
+    }
+  }
 
   return (
     <div className="bg-white rounded-t-xl overflow-hidden shadow-sm flex flex-col h-full">

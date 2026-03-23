@@ -30,7 +30,8 @@ function HotelListContent() {
 
   const [filterStar, setFilterStar] = useState<number | null>(null)
   const [filterMaxPrice, setFilterMaxPrice] = useState<number | null>(null)
-
+  // 记录当前正在被点击预订的酒店 ID (状态锁)
+  const [bookingHotelId, setBookingHotelId] = useState<number | null>(null)
   // 当筛选条件改变时，重置分页和列表
   useEffect(() => {
     setPage(1)
@@ -82,6 +83,32 @@ function HotelListContent() {
     if (observerRef.current) observer.observe(observerRef.current)
     return () => observer.disconnect()
   }, [hasMore, isLoading])
+
+  // 处理去预订的点击逻辑
+  const handleBookClick = async (e: React.MouseEvent<HTMLButtonElement>, hotelId: number) => {
+    // 1. 极其重要：阻止事件冒泡！防止触发外层 div 的 router.push 跳转到详情页
+    e.stopPropagation()
+
+    // 2. 状态锁拦截：如果当前有正在处理的预订，直接忽略新的点击
+    if (bookingHotelId !== null) return
+
+    // 3. 上锁
+    setBookingHotelId(hotelId)
+
+    try {
+      // 4. 模拟向后端发送预订前置校验（例如查库存）
+      await new Promise((resolve) => setTimeout(resolve, 800))
+
+      // 5. 校验成功，执行实际的订单页跳转
+      console.log(`校验通过，准备跳转到酒店 ${hotelId} 的下单页`)
+      // router.push(`/mobile/order/confirm?hotelId=${hotelId}`)
+    } catch (error) {
+      console.error('预订前置校验失败:', error)
+    } finally {
+      // 6. 无论成功失败，必须解锁
+      setBookingHotelId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 max-w-md mx-auto">
@@ -175,8 +202,19 @@ function HotelListContent() {
                         <span className="text-xl">{hotel.price}</span>
                         <span className="text-xs text-gray-400 font-normal ml-1">起</span>
                       </div>
-                      <button className="bg-blue-600 text-white text-xs px-4 py-1.5 rounded-full active:bg-blue-700">
+                      {/* <button className="bg-blue-600 text-white text-xs px-4 py-1.5 rounded-full active:bg-blue-700">
                         去预订
+                      </button> */}
+                      <button
+                        onClick={(e) => handleBookClick(e, hotel.id)}
+                        disabled={bookingHotelId === hotel.id}
+                        className={`text-xs px-4 py-1.5 rounded-full transition-colors ${
+                          bookingHotelId === hotel.id
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-blue-600 text-white active:bg-blue-700'
+                        }`}
+                      >
+                        {bookingHotelId === hotel.id ? '处理中...' : '去预订'}
                       </button>
                     </div>
                   </div>
@@ -193,6 +231,17 @@ function HotelListContent() {
           </div>
         )}
       </div>
+
+      {bookingHotelId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-20 backdrop-blur-sm">
+          {/* 居中的 Loading 提示面板 */}
+          <div className="bg-white px-6 py-4 rounded-xl shadow-lg flex flex-col items-center animate-pulse">
+            {/* 使用 Tailwind 实现的 CSS 原生 Loading 旋转圈 */}
+            <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+            <span className="text-gray-800 text-sm font-medium tracking-wide">正在锁定房间...</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
