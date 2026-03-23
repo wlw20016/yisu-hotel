@@ -8,6 +8,10 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation' // 👉 新增引入
 import { Swiper } from 'antd-mobile'
 import RecommendVirtualList from './components/RecommendVirtualList'
+// 1. 引入埋点工具
+import { sendTrackEvent } from './../../utiles/track'
+// 在文件顶部的 import 区域加入这行：
+import TrackedBannerItem, { BannerType } from './components/TrackedBannerItem'
 const CitySelector = dynamic(() => import('./components/CitySelector'), { ssr: false })
 
 interface Hotel {
@@ -56,7 +60,7 @@ const HomePage: React.FC = () => {
   const [appliedKeyword, setAppliedKeyword] = useState<string>('')
 
   // 👉 新增：定义轮播图广告数据源 (id 请替换为你数据库中真实存在的酒店 id)
-  const adBanners = [
+  const adBanners: BannerType[] = [
     {
       id: 1, // 假设跳转到 ID 为 1 的酒店
       img: 'https://img95.699pic.com/photo/50048/1095.jpg_wh860.jpg',
@@ -161,21 +165,35 @@ const HomePage: React.FC = () => {
       )}
 
       {/* 真实的自动轮播图 - 带广告跳转 */}
-      <div className="relative h-48 bg-gray-200 overflow-hidden">
+      {/* <div className="relative h-48 bg-gray-200 overflow-hidden">
         <Swiper autoplay loop>
           {adBanners.map((banner, index) => (
             <Swiper.Item key={index}>
-              {/* 👉 新增：绑定 onClick 跳转事件，并加上 cursor-pointer 提示可点击 */}
+              {/* 👉 新增：绑定 onClick 跳转事件，并加上 cursor-pointer 提示可点击 
               <div
                 className="w-full h-48 relative cursor-pointer active:opacity-90 transition-opacity"
                 onClick={() => router.push(`/mobile/hotel/${banner.id}`)}
               >
                 <img src={banner.img} alt={banner.title} className="w-full h-full object-cover" />
-                {/* 可选：加一个半透明的广告小标题，让它看起来更像真实的推广位 */}
+                {/* 可选：加一个半透明的广告小标题，让它看起来更像真实的推广位 
                 <div className="absolute bottom-6 right-0 bg-black bg-opacity-50 text-white text-xs px-3 py-1 rounded-l-full backdrop-blur-sm">
                   {banner.title}
                 </div>
               </div>
+            </Swiper.Item>
+          ))}
+        </Swiper>
+      </div> */}
+
+      <div className="relative h-48 bg-gray-200 overflow-hidden">
+        <Swiper autoplay loop>
+          {adBanners.map((banner, index) => (
+            <Swiper.Item key={index}>
+              {/* 这里使用抽离出来的子组件 */}
+              <TrackedBannerItem
+                banner={banner}
+                onBannerClick={() => router.push(`/mobile/hotel/${banner.id}`)}
+              />
             </Swiper.Item>
           ))}
         </Swiper>
@@ -262,12 +280,40 @@ const HomePage: React.FC = () => {
           </div>
         </div>
 
-        <div className="py-2">
-          {/* 👉 查询按钮点击后，携带参数跳转到真正的列表页 */}
+        {/* <div className="py-2">
           <button
             className="w-full py-3 rounded-full font-medium text-lg bg-blue-600 text-white shadow-md active:bg-blue-700 transition-colors"
             onClick={() => {
               const queryCity = positionText === '我的位置' ? selectedCity : positionText
+              router.push(
+                `/mobile/list?city=${encodeURIComponent(queryCity)}&keyword=${encodeURIComponent(inputText)}`,
+              )
+            }}
+          >
+            查询
+          </button>
+        </div> */}
+
+        <div className="py-2">
+          {/* 查询按钮 */}
+          <button
+            className="w-full py-3 rounded-full font-medium text-lg bg-blue-600 text-white shadow-md active:bg-blue-700 transition-colors"
+            onClick={() => {
+              const queryCity = positionText === '我的位置' ? selectedCity : positionText
+
+              // 2. 触发点击埋点，将当前的重要状态作为 payload 传给后端
+              sendTrackEvent({
+                eventId: 'home_search_submit',
+                eventType: 'CLICK',
+                payload: {
+                  city: queryCity,
+                  keyword: inputText,
+                  starFilter: filterStar || 'none',
+                  priceFilter: filterMaxPrice || 'none',
+                },
+              })
+
+              // 原有的跳转逻辑
               router.push(
                 `/mobile/list?city=${encodeURIComponent(queryCity)}&keyword=${encodeURIComponent(inputText)}`,
               )
