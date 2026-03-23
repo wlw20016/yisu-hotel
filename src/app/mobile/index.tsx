@@ -7,6 +7,7 @@ import DateTimeSelector from './components/DateTimeSelector'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation' // 👉 新增引入
 import { Swiper } from 'antd-mobile'
+import RecommendVirtualList from './components/RecommendVirtualList'
 const CitySelector = dynamic(() => import('./components/CitySelector'), { ssr: false })
 
 interface Hotel {
@@ -276,7 +277,7 @@ const HomePage: React.FC = () => {
           </button>
         </div>
 
-        {/* 酒店列表渲染区 */}
+        {/* 酒店列表渲染区
         <div className="mt-6 mb-6">
           <h2 className="text-lg font-bold text-gray-800 mb-4">为您推荐</h2>
 
@@ -348,7 +349,9 @@ const HomePage: React.FC = () => {
               暂无符合条件的酒店
             </div>
           )}
-        </div>
+        </div> */}
+
+        <RecommendVirtualList />
       </div>
 
       <MobileNavbar />
