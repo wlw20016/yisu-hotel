@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const tokenPayload = {
       id: user.id,
       username: user.username,
-      role: user.role,
+      role: (user.role || '').toUpperCase(),
     }
 
     // 2. 签发 JWT

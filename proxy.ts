@@ -24,32 +24,53 @@ export async function proxy(request: NextRequest) {
   if (!isMerchantApi && !isAdminApi && !isMerchantPage && !isAdminPage) {
     return NextResponse.next()
   }
-
+  // 1. 梳理需要拦截的路由规则
+  const isLoginPage = pathname === '/login' // 或者是你实际的登录路由路径
   // 2. 从 Cookie 中提取 Token
   const token = request.cookies.get('yisu_token')?.value
 
-  if (!token) {
+  // 👉 新增逻辑：如果已经有 token，且访问的是登录页，直接在服务端把它踢到对应的后台，不让它渲染登录页！
+  if (token && isLoginPage) {
+    try {
+      const { payload } = await jwtVerify(token, JWT_SECRET)
+      const safeRole = ((payload.role as string) || '').toUpperCase()
+
+      if (safeRole === 'ADMIN') {
+        return NextResponse.redirect(new URL('/admin', request.url))
+      } else if (safeRole === 'MERCHANT') {
+        return NextResponse.redirect(new URL('/merchant', request.url))
+      }
+    } catch (e) {
+      // token 无效或过期，放行让它正常渲染登录页
+    }
+  }
+
+  // 原来的未登录拦截逻辑
+  if (!token && !isLoginPage) {
     return handleUnauthorized(request, '未登录，缺少身份令牌')
   }
 
   try {
     // 3. 验证并解析 JWT
-    const { payload } = await jwtVerify(token, JWT_SECRET)
+    const { payload } = await jwtVerify(token!, JWT_SECRET)
     const user = payload as unknown as JwtPayload
 
+    // 👉 修复核心：将数据库里取出的角色统一转为大写
+    const safeRole = (user.role || '').toUpperCase()
+
     // 4. 越权校验 (RBAC 角色控制)
-    if ((isAdminApi || isAdminPage) && user.role !== 'ADMIN') {
+    if ((isAdminApi || isAdminPage) && safeRole !== 'ADMIN') {
       return handleUnauthorized(request, '权限不足：仅管理员可访问', 403)
     }
 
-    if ((isMerchantApi || isMerchantPage) && user.role !== 'MERCHANT') {
+    if ((isMerchantApi || isMerchantPage) && safeRole !== 'MERCHANT') {
       return handleUnauthorized(request, '权限不足：仅商户可访问', 403)
     }
 
-    // 5. 核心：将解析出的真实用户 ID 注入到请求头中，向下游 API 传递
+    // 5. 核心：将解析出的真实用户 ID 和标准化后的角色注入到请求头中
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set('x-user-id', String(user.id))
-    requestHeaders.set('x-user-role', user.role)
+    requestHeaders.set('x-user-role', safeRole) // 传递大写的角色
 
     return NextResponse.next({
       request: {
